@@ -1,6 +1,9 @@
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
 
 import edu.rutgers.cs.cs352.bt.exceptions.BencodingException;
 import edu.rutgers.cs.cs352.bt.util.TorrentInfo;
@@ -17,6 +20,8 @@ public class RUBTClient {
 		String torrentFile = args[0];
 		String outputFile = args[1];
 		
+		URL url; 
+		
 		
 		byte[] torrentInBytes;
 		try {
@@ -30,9 +35,23 @@ public class RUBTClient {
 			System.out.println("errors");
 		}
 		
+		
 		System.out.println("Que");
-		System.out.println(torrent.file_name);
+		System.out.println(torrent.announce_url);
 		System.out.println("Quand");
+		
+		URLConnection connection;
+		try {
+			connection = torrent.announce_url.openConnection();
+			InputStream response = connection.getInputStream();
+			
+			System.out.println(response.toString());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
 		
 	}
 	
