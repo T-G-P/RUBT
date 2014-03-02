@@ -1,13 +1,12 @@
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -28,27 +27,12 @@ public class RUBTClient {
 	
 	public static Charset charset = Charset.forName("UTF-8");
 	public static CharsetEncoder encoder = charset.newEncoder();
-	public static CharsetDecoder decoder = charset.newDecoder();
 
 	public static ByteBuffer str_to_bb(String msg){
 	  try{
 	    return encoder.encode(CharBuffer.wrap(msg));
 	  }catch(Exception e){e.printStackTrace();}
 	  return null;
-	}
-
-	public static String bb_to_str(ByteBuffer buffer){
-	  String data = "";
-	  try{
-	    int old_position = buffer.position();
-	    data = decoder.decode(buffer).toString();
-	    // reset buffer's position to its original so it is not altered:
-	    buffer.position(old_position);  
-	  }catch (Exception e){
-	    e.printStackTrace();
-	    return "";
-	  }
-	  return data;
 	}
 	
 	public static void main(String[] args) {
@@ -98,49 +82,35 @@ public class RUBTClient {
 			int responseCode = connection.getResponseCode();
 			response = connection.getInputStream();
 			
-			/*
-			for (Entry<String, List<String>> header: connection.getHeaderFields().entrySet()) {
-					System.out.println("key = " + header.getKey() + ", value = " + header.getValue());
-			}
-			Map<String, List<String>> headers = connection.getHeaderFields();
-			*/
-			
 			DataInputStream reader = new DataInputStream(response);
 			
 			byte[] response_bytes = new byte[reader.available()];
-			reader.readFully(response_bytes);
+			reader.readFully(response_bytes);			
 			
+			Map<ByteBuffer, Object> map = (Map<ByteBuffer, Object>)Bencoder2.decode(response_bytes);;						
+			ArrayList<Map<ByteBuffer, Object>> list = (ArrayList<Map<ByteBuffer, Object>>) map.get(str_to_bb("peers"));
+			Map<ByteBuffer, Object> peers = (Map<ByteBuffer, Object>) list.get(0);
 			
-			Map<ByteBuffer, String> map = (Map<ByteBuffer, String>)Bencoder2.decode(response_bytes);;
+			ByteBuffer buff1 = (ByteBuffer)  peers.get(str_to_bb("peer id"));
+			String curr_id = new String(buff1.array());
 			
+			ByteBuffer buff2 = (ByteBuffer)  peers.get(str_to_bb("ip"));
+			String curr_ip = new String(buff2.array());
 			
-			ArrayList<Map<ByteBuffer, String>> list = (ArrayList<Map<ByteBuffer, String>>) Bencoder2.decode(map.get(encoder.encode(CharBuffer.wrap("peers"))).getBytes());
-			//Map<ByteBuffer, String> map = Bencoder2.decode(list.get(0).get(encoder.encode(CharBuffer.wrap("peer id"))).);
-			//ArrayList<Map<ByteBuffer, String>> test1 = (ArrayList<Map<ByteBuffer, String>>) Bencoder2.decode((byte[]) test);
+			int curr_port = (Integer) peers.get(str_to_bb("port"));
 			
-			//ToolKit.print(test1.get(0).get(str_to_bb("peer id")));
+			//Socket socket = new Socket(curr_ip, port);
 			
-			//String s = test1.get(0).get(str_to_bb("peer id")).toString();
-			//System.out.println(s);
-			
-			
-			ToolKit.print(map);
 			response.close();
 			
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
-		
-		
-		
+		}	
 	}
-
 		
 	
 	public static byte[] bytesFromFile(String filename) throws IOException {
-
-		
 		File file = new File(filename);
 		
 		byte[] bytes = new byte[(int) file.length()];
