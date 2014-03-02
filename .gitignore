@@ -1,6 +1,6 @@
 *.torrent
 .metadata
-*.class
+
 
 # Package Files #
 *.jar
