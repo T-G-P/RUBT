@@ -1,17 +1,19 @@
 
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.util.ArrayList;
 import java.util.Formatter;
@@ -19,12 +21,16 @@ import java.util.Map;
 
 import edu.rutgers.cs.cs352.bt.exceptions.BencodingException;
 import edu.rutgers.cs.cs352.bt.util.Bencoder2;
-import edu.rutgers.cs.cs352.bt.util.ToolKit;
 import edu.rutgers.cs.cs352.bt.util.TorrentInfo;
 
 
 public class RUBTClient {
 	
+	//Variable for output file
+	static RandomAccessFile destination;
+	
+	//Encodes strings into bytebuffers
+	//used to search keys in the map<bytebuffer, object>
 	public static Charset charset = Charset.forName("UTF-8");
 	public static CharsetEncoder encoder = charset.newEncoder();
 
@@ -40,67 +46,183 @@ public class RUBTClient {
 			System.out.println("Que 1");
 			return;
 		}
-		
 		String torrentFile = args[0];
 		String outputFile = args[1];
 		
+		//Set output file and set writing to disc
+		try {
+			destination = new RandomAccessFile(outputFile, "rwd");
+		} catch (FileNotFoundException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 		
+		//turn torrent file into byte array
 		byte[] torrentInBytes;
 		try {
 			torrentInBytes = bytesFromFile(torrentFile);
 		}catch (Exception e) { System.out.println("Que 2"); return; }
 		
+		//encode torrent byte array and store it in TorrentInfo object
 		TorrentInfo torrent = null;
 		try {
 			torrent = new TorrentInfo(torrentInBytes);
+			torrentInBytes = null;		
 		} catch (BencodingException e) {
 			System.out.println("errors");
+			return;
 		}
-				
+		
+		//Connection variables
 		HttpURLConnection connection;
 		InputStream response;
 		InputStreamReader response_reader;
-		
 		try {
-			byte[] info_hash = torrent.info_hash.array();
-			
-			String hex = toHex(info_hash);
-			String encodedHex = encode(hex);
-						
-			
+			//Contructing connection url
 			String peer_id = "ABCDEFGHIJKLMNOPQRST";
 			int port = 6881;
 			int left = torrent.file_length;
 			
-			String url = torrent.announce_url + "?info_hash=" + encodedHex
+			String url = torrent.announce_url + "?info_hash=" + encode(toHex(torrent.info_hash.array())) //change byte array to hex string, then encode hexstring
 						+ "&peer_id=" + peer_id
 						+ "&port=" + port 
 						+ "&downloaded=0"
 						+ "&left=" + left;
+
 			
 			connection = (HttpURLConnection) new URL(url).openConnection();
-			int responseCode = connection.getResponseCode();
+	
 			response = connection.getInputStream();
-			
 			DataInputStream reader = new DataInputStream(response);
 			
 			byte[] response_bytes = new byte[reader.available()];
 			reader.readFully(response_bytes);			
 			
+			//casting generic objects to proper types to access the data within them
 			Map<ByteBuffer, Object> map = (Map<ByteBuffer, Object>)Bencoder2.decode(response_bytes);;						
 			ArrayList<Map<ByteBuffer, Object>> list = (ArrayList<Map<ByteBuffer, Object>>) map.get(str_to_bb("peers"));
 			Map<ByteBuffer, Object> peers = (Map<ByteBuffer, Object>) list.get(0);
 			
-			ByteBuffer buff1 = (ByteBuffer)  peers.get(str_to_bb("peer id"));
-			String curr_id = new String(buff1.array());
 			
-			ByteBuffer buff2 = (ByteBuffer)  peers.get(str_to_bb("ip"));
-			String curr_ip = new String(buff2.array());
+			//Storing the information from the peer (Needs to be changed to find the peer by its peer id)
+			ByteBuffer buff = (ByteBuffer)  peers.get(str_to_bb("peer id"));
+			String curr_id = new String(buff.array());
+			
+			buff = (ByteBuffer)  peers.get(str_to_bb("ip"));
+			String curr_ip = new String(buff.array());
 			
 			int curr_port = (Integer) peers.get(str_to_bb("port"));
 			
-			//Socket socket = new Socket(curr_ip, port);
+			Socket socket = new Socket(curr_ip, curr_port);
+						
 			
+			//Handshake with tracker
+			byte[] header = {0x13, 'B','i','t','T','o','r','r','e','n','t',' ','p','r','o','t','o','c','o','l',0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+			byte[] SHA = torrent.info_hash.array();
+			byte[] peerID = peer_id.getBytes();
+			
+			byte[] message = makeMessage(header, SHA, peerID);
+			byte[] serverResponse = new byte[message.length];
+			DataInputStream  socketIn = new DataInputStream(socket.getInputStream());
+			
+			DataOutputStream socketOut  = new DataOutputStream(socket.getOutputStream());
+			
+			//Shake hands
+			socketOut.write(19);
+			socketOut.write("BitTorrent protocol".getBytes());
+			byte[] reserved = new byte[8];
+			socketOut.write(reserved);
+			socketOut.write(torrent.info_hash.array());
+			socketOut.write(peer_id.getBytes());
+			socketOut.flush();
+			socketIn.readFully(serverResponse);
+			
+			//Show interest
+			socketOut.writeInt(1);
+			socketOut.writeByte(2);
+			socketOut.flush();
+			
+			//Verify matching hash
+			boolean SHA_match = compareSHA(message,serverResponse);
+			boolean unchoked = false;
+			
+			//Variables for storing messages
+			int length = 0;
+			byte id = 0x00;
+			byte[] payload = null;
+			int index = 0;
+			int offset = 0;
+			int piece_length = torrent.piece_length/2;
+			
+			//testing stuff
+			double count = 0;
+			boolean half = false;
+			
+			if (!SHA_match){
+				socket.close();
+			}else {
+				System.out.println("matched");
+				while (true) {
+					
+					/*********************************************************/
+					/*            The message passing portion                */
+					/* Everything enclosed in this flag is subject to change */
+					/*********************************************************/
+					
+					if (socketIn.available() != 0) {
+						length = socketIn.readInt();
+						id = socketIn.readByte();
+						if (length > 0) {
+							if (id == 7) {
+								index = socketIn.readInt();
+								offset = socketIn.readInt();
+								payload = new byte[socketIn.available()];
+								socketIn.read(payload);
+								writeFile(payload, index, offset, torrent.piece_length);
+								count += .5;
+								half = !half;
+							}else {
+								payload = new byte[length - 1];
+								socketIn.read(payload);
+							}
+						}
+						System.out.println("ID = " + id);
+						if (id == 1) {
+							unchoked = true;
+						}
+					}else {
+						socketOut.writeInt(0);
+						socketOut.flush();
+					}
+					/*
+					socketOut.write(1);
+					socketOut.writeByte(2);
+					socketOut.flush();
+					*/
+					if (unchoked) {
+						
+						socketOut.writeInt(13);
+						socketOut.writeByte(6);
+						socketOut.writeInt(0);
+					
+						socketOut.writeInt(0);
+					
+						socketOut.writeInt(piece_length);
+						socketOut.flush();		
+						
+					}
+					
+					/*********************************************************/
+					/*            The message passing portion                */
+					/* Everything enclosed in this flag is subject to change */
+					/*********************************************************/
+					
+				}
+			}
+			//Close all the connection variables
+			socketOut.close();
+			socketIn.close();
+			socket.close();
 			response.close();
 			
 		} catch (Exception e) {
@@ -108,8 +230,60 @@ public class RUBTClient {
 			e.printStackTrace();
 		}	
 	}
-		
 	
+	//Compares the hashes to ensure they are the same
+	public static boolean compareSHA(byte[] sent, byte[] response) {
+		for (int x = 28; x < 48; x++) {
+			if (sent[x] != response[x]){
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	//prints byte arrays, for debugging purposes
+	public static void printBytes(byte[] b) {
+		for (int x = 0; x < b.length; x++) {
+			System.out.print(String.format("%02x",b[x]));
+		}
+		System.out.println();
+	}
+	
+	//makes the hand shake message (will eventually be removed)
+	public static byte[] makeMessage(byte[] header, byte[] sha, byte[] peer_id) {
+		int length = header.length + sha.length + peer_id.length;
+		byte[] message = new byte[length];
+		int i = 0;
+		for (int x = 0; x < header.length; x++) {
+			message[i] = header[x];
+			i++;
+		}
+		for (int x = 0; x < sha.length; x++) {
+			message[i] = sha[x];
+			i++;
+		}
+		for (int x = 0; x < peer_id.length; x++) {
+			message[i] = peer_id[x];
+			i++;
+		}
+		
+		return message;
+	}
+	
+	//writes the data pieces to a new file
+	public static void writeFile(byte[] data, int index, int offset, int piecesize) {
+		long trueOffset = (piecesize * index) + offset;
+		try {
+			destination.seek(trueOffset);
+			destination.write(data);
+			destination.seek(0);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	//translates a file into a byte array
 	public static byte[] bytesFromFile(String filename) throws IOException {
 		File file = new File(filename);
 		
@@ -134,6 +308,7 @@ public class RUBTClient {
 		
 	}
 	
+	//translate string to hex
 	public static String toHex(byte[] bytes) {
 		Formatter formatter = new Formatter();
 		for (byte b: bytes) {
@@ -142,6 +317,7 @@ public class RUBTClient {
 		return formatter.toString();
 	}
 	
+	//URL encodes the hex string
 	public static String encode(String s) {
 		String result = "";
 		for (int i = 0; i < s.length(); i += 2){
