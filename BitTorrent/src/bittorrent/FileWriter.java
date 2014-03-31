@@ -12,6 +12,9 @@ public class FileWriter {
 		initialize(outputFile);
 	}
 	
+	/*
+	 * Creates an empty file with the name of the given input
+	 */
 	private void initialize(String outputFile) {
 		try {
 			destination = new RandomAccessFile(outputFile, "rwd");
@@ -21,6 +24,9 @@ public class FileWriter {
 		}
 	}
 	
+	/*
+	 * Writes a piece of data into the empty file starting at the position given by the piece's index
+	 */
 	public void writeFile(Piece piece) {
 		long trueOffset = (piece.getLength() * piece.getIndex());
 		try {

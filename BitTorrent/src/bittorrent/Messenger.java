@@ -38,18 +38,27 @@ public class Messenger {
 		this.port = port;	
 	}
 	
+	/*
+	 * Opens a connection to the peer the messenger was created with
+	 */
 	public void initialize() throws UnknownHostException, IOException {
 		socket = new Socket(ip, port);	
 		socketIn = new DataInputStream(socket.getInputStream());
 		socketOut = new DataOutputStream(socket.getOutputStream());
 	}
 	
+	/*
+	 * Closes all connections the current messenger has open
+	 */
 	public void destroy() throws UnknownHostException, IOException {
 		socketOut.close();
 		socketIn.close();
 		socket.close();
 	}
 	
+	/*
+	 * Handshakes with the peer
+	 */
 	public boolean handshake(TorrentInfo torrent) throws IOException {
 		
 		byte[] serverResponse = new byte[68];
@@ -68,6 +77,9 @@ public class Messenger {
 		return compareSHA(torrent.info_hash.array(), serverResponse);
 	}
 	
+	/*
+	 * Reads messages from the peer
+	 */
 	public Piece checkResponse() throws IOException {
 		
 		length = socketIn.readInt();
@@ -95,6 +107,9 @@ public class Messenger {
 		return null;
 	}
 	
+	/*
+	 * Sends the peer a piece request message
+	 */
 	public int requestPiece(TorrentInfo torrent) throws IOException{
 		if (unchoked) {
 			if (count >= torrent.piece_hashes.length) {
@@ -112,7 +127,9 @@ public class Messenger {
 		return 1;
 	}
 	
-	
+	/*
+	 * Sends the peer an interested message
+	 */
 	public void showInterest() throws IOException{
 		socketOut.writeInt(1);
 		socketOut.writeByte(2);
@@ -120,6 +137,9 @@ public class Messenger {
 
 	}
 	
+	/*
+	 * Verifies that the peer has a matching SHA hash with the client
+	 */
 	public static boolean compareSHA(byte[] sent, byte[] response) {
 		for (int x = 28; x < 48; x++) {
 			if (sent[x-28] != response[x]) {

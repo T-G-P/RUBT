@@ -28,6 +28,10 @@ public class Tracker {
 	public Tracker(TorrentInfo file) {
 		torrent = file;
 	}
+	
+	/*
+	 * Creates connection to tracker
+	 */
 	public void connect() throws MalformedURLException, IOException {
 		
 		String peer_id = "ABCDEFGHIJKLMNOPQRST";
@@ -46,11 +50,17 @@ public class Tracker {
 		reader.close();
 	}
 	
+	/*
+	 * Close connection to tracker
+	 */
 	public void disconnect() throws MalformedURLException, IOException {
 		response.close();	
 		connection.disconnect();
 	}
 	
+	/*
+	 * Takes the response from the tracker and accesses the lists of peers and stores them in a local array
+	 */
 	@SuppressWarnings("unchecked")
 	public Peer[] getPeers() throws BencodingException{
 		Map<ByteBuffer, Object> map = (Map<ByteBuffer, Object>) Bencoder2.decode(response_bytes);
@@ -72,6 +82,10 @@ public class Tracker {
 		return peers;
 	}
 	
+	
+	/*
+	 * Helper methods for the above functions
+	 */
 	public static String toHex(byte[] bytes) {
 		Formatter formatter = new Formatter();
 		for (byte b : bytes) {

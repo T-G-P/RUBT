@@ -15,6 +15,9 @@ public class Torrent {
 		return new TorrentInfo(bytesFromFile(torrentFile));
 	}
 	
+	/*
+	 * Takes the torrent file and converts it into an array of bytes for the bencoder to use
+	 */
 	static byte[] bytesFromFile(String filename) throws IOException {
 		File file = new File(filename);
 		byte[] bytes = new byte[(int) file.length()];
