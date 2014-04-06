@@ -71,11 +71,26 @@ public class RUBTClient {
 				// FIXME: Verify piece data first
 				
 				Piece current_piece = peer.checkResponse();
+                                //We need to make it either do a read or write file.
 				if (current_piece != null) {
 					System.out.println("Downloading piece #" + (current_piece.getIndex() + 1));
 					file.writeFile(current_piece);
 				}
-			
+                                /*
+                                This is the code for when you're sending a file, idk how you want to change how the responses are handled atm
+                                
+                                if (current_piece != null) {
+                                    byte[] data = new byte[0];
+                                    try {
+                                     data = file.readFile(current_piece);
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                    socketOut.writeByte(data);
+                                    socketOut.flush();
+                                
+                                }
+                                */
 				if (peer.requestPiece(torrent) == -1) {
 					break;
 				}

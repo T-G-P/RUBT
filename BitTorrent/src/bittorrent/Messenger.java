@@ -85,6 +85,19 @@ public class Messenger {
 		length = socketIn.readInt();
 		if (length > 0) {
 			message_id = socketIn.readByte();
+                        //Uploading
+                        if (message_id == 6) {
+                            byte[] uploadByte = new byte[0];
+                            
+                            index = socketIn.readInt();
+                            offset = socketIn.readInt();
+                            piece_length = socketIn.readInt();
+                            //TODO : Error checking for large block requests
+                            //payload is null since we aren't getting anything from the person requesting the file
+                            //just setting up the piece for now.
+                            Piece piece = new Piece(null, index, offset, piece_length, (length - 9));
+                            return piece;
+                        }
 			if (message_id == 7) {
 
 				index = socketIn.readInt();
@@ -106,7 +119,6 @@ public class Messenger {
 		}
 		return null;
 	}
-	
 	/*
 	 * Sends the peer a piece request message
 	 */

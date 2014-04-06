@@ -37,4 +37,16 @@ public class FileWriter {
 			e.printStackTrace();
 		}
 	}
+        /*
+         * Reads a piece of data from the file that is requested by the peer.
+        */
+        public byte[] readFile(Piece piece) {
+            byte [] request = new byte[0];
+            try {
+                destination.read(request, piece.getIndex(), piece.getLength());
+            } catch (IOException e) {
+                e.printStackTrace();
+             }
+            return request;
+        }
 }
