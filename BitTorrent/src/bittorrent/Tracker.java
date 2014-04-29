@@ -58,6 +58,13 @@ public class Tracker {
 		connection.disconnect();
 	}
 	
+	public boolean validateIP(String ip) {
+		if (ip.equals("128.6.171.130") || ip.equals("128.6.171.131")) {
+			return true;
+		}
+		return false;
+	}
+	
 	/*
 	 * Takes the response from the tracker and accesses the lists of peers and stores them in a local array
 	 */
@@ -65,7 +72,7 @@ public class Tracker {
 	public Peer[] getPeers() throws BencodingException{
 		Map<ByteBuffer, Object> map = (Map<ByteBuffer, Object>) Bencoder2.decode(response_bytes);
 		ArrayList<Map<ByteBuffer, Object>> list = (ArrayList<Map<ByteBuffer, Object>>) map.get(str_to_bb("peers"));
-		Peer[] peers = new Peer[list.size()];
+		ArrayList<Peer> peers = new ArrayList<Peer>();
 		for (int i = 0;  i < list.size(); i++){
 			Map<ByteBuffer, Object> peer = (Map<ByteBuffer, Object>) list.get(i);
 			
@@ -76,10 +83,12 @@ public class Tracker {
 			String curr_ip = new String(buff.array());
 
 			int curr_port = (Integer) peer.get(str_to_bb("port"));
-			
-			peers[i] = new Peer(curr_id, curr_ip, curr_port);
+			if (validateIP(curr_ip)) {
+				peers.add(new Peer(curr_id, curr_ip, curr_port));
+			}
 		}
-		return peers;
+		
+		return peers.toArray(new Peer[peers.size()]);
 	}
 	
 	
