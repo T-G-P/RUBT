@@ -6,6 +6,7 @@ import java.util.Random;
 import bittorrent.FileWriter;
 import bittorrent.Messenger;
 import bittorrent.Peer;
+import bittorrent.PeerConnector;
 import bittorrent.Piece;
 import bittorrent.PieceManager;
 import bittorrent.Torrent;
@@ -13,8 +14,7 @@ import bittorrent.Tracker;
 import edu.rutgers.cs.cs352.bt.exceptions.BencodingException;
 import edu.rutgers.cs.cs352.bt.util.TorrentInfo;
 
-public class RUBTClient {
-
+public class RUBTClient extends Thread{
 	public static void main(String[] args) {
 		if (args.length != 2) {
 			return;
@@ -85,76 +85,12 @@ public class RUBTClient {
 		}
 
 		int i = 7;
-		Messenger peer = null;
 		System.out.println("Length of pieces" + torrent.piece_length);
 		System.out.println("Chunks per piece" + (torrent.piece_length / 16384));
 		System.out.println("Remainder" + (torrent.piece_length % 16384));
 		while (PieceManager.numTrue() != torrent.piece_hashes.length) {
-			try {
-				if (i == peers.length) {
-					i = 0;
-				}
-				String curr_ip = peers[i].getIp();
-				int curr_port = peers[i].getPort();
-				byte[] peer_id = peers[i].getId();
-
-				peer = new Messenger(curr_ip, peer_id, curr_port);
-				System.out.println("Using " + peer);
-				peer.initialize();
-				boolean SHA_match = peer.handshake(torrent);
-
-				if (!SHA_match) {
-					peer.destroy();
-					i++;
-					continue;
-				}
-
-				peer.showInterest();
-				while (true) {
-					// FIXME: Verify piece data first
-					//System.out.println("Running");
-					Object message = peer.checkResponse();
-					
-					if (message != null) {
-						if (message instanceof byte[]) {
-							byte[] bytes = (byte[]) message;
-							String byteString = new String(bytes);
-							System.out.println(byteString);
-						} else if (message instanceof Piece) {
-							Piece current_piece = (Piece) message;
-							System.out.println("Downloading piece #"
-									+ (current_piece.getIndex()));
-							file.writeFile(current_piece);
-							PieceManager.markPiece(current_piece.getIndex());
-						} else if (message instanceof String[]) {
-							String[] response = (String[]) message;
-							for (int x = 0; x < response.length; x++) {
-								System.out.println(response[x]);
-							}
-							i++;
-							break;
-						}
-					} 
-
-					if (peer.requestPiece(torrent) == -1) {
-						System.out.println("Breaking");
-						System.out.println(PieceManager.numTrue());
-						if (PieceManager.clearIncomplete()) {
-							break;
-						}
-					}
-					
-				}
-				peer.destroy();
-				
-			} catch (Exception e) {
-				System.err.println("Exception from " + peer);
-				e.printStackTrace();
-				
-			}finally {
-				++i; 
-			}
-		}
+			PeerConnector peerTest = new PeerConnector(peers, i, torrent, file);
+			new Thread(peerTest).start();
 		try {
 			tracker.disconnect();
 		} catch (MalformedURLException e) {
@@ -164,8 +100,8 @@ public class RUBTClient {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-
 	}
+}
 
 	private static final byte[] genPeerId() {
 		byte[] peerId = new byte[20];
