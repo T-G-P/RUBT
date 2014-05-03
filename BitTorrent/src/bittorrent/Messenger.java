@@ -11,6 +11,8 @@ import edu.rutgers.cs.cs352.bt.util.TorrentInfo;
 
 public class Messenger {
 
+	static byte[] sourceID;
+	
 	byte[] id;
 	String ip;
 	int port;
@@ -32,6 +34,10 @@ public class Messenger {
 		this.ip = ip;
 		this.port = port;
 		pieces = new ArrayList<Integer>();
+	}
+	
+	public static void setPID(byte[] source_id) {
+		sourceID = source_id;
 	}
 
 	/*
@@ -60,12 +66,11 @@ public class Messenger {
 		byte[] serverResponse = new byte[68];
 		byte[] reserved = new byte[8];
 		requestedPieceLength = torrent.piece_length;
-
-		socketOut.write(19);
+		socketOut.writeByte(19);
 		socketOut.write("BitTorrent protocol".getBytes());
 		socketOut.write(reserved);
 		socketOut.write(torrent.info_hash.array());
-		socketOut.write(this.id);
+		socketOut.write(sourceID);
 		socketOut.flush();
 		socketIn.readFully(serverResponse);
 
@@ -75,8 +80,8 @@ public class Messenger {
 	public String[] bitfieldBits(byte[] message) {
 		String[] result = new String[message.length];
 		for (int i = 0; i < message.length; i++) {
-			String bits = "00000000" + Integer.toBinaryString(message[i]);
-			result[i] = bits.substring(bits.length() - 8);
+			String bits = String.format("%8s", Integer.toBinaryString(message[i] & 0xFF)).replace(' ', '0');
+			result[i] = bits;
 		}
 		return result;
 	}
@@ -85,10 +90,7 @@ public class Messenger {
 	 * Reads messages from the peer
 	 */
 	public Object checkResponse() throws IOException {
-		if (socketIn.available() < 4) {
-			//System.out.println("No response yet");
-			return null;
-		}
+		System.out.println("Reading length");
 		int length = socketIn.readInt();
 		System.out.println("She said I wanna go home");
 		
@@ -138,8 +140,7 @@ public class Messenger {
 			} else if (message_id == 5) {
 				System.out.println(message_id);
 				byte[] payload = new byte[length - 1];
-				// return bitfieldBits(payload);
-				return payload;
+				return bitfieldBits(payload);
 			} else if (message_id == 6) {
 				System.out.println(message_id);
 				// request
@@ -151,9 +152,13 @@ public class Messenger {
 				unchoked = false;
 			} else {
 				// TODO: Handle other message types
+
+				System.out.println(message_id);
 				int left = socketIn.available();
 				socketIn.readFully(new byte[left]);
 			}
+		} else {
+			System.out.println("keep alive");
 		}
 		return null;
 	}
@@ -163,24 +168,22 @@ public class Messenger {
 	 */
 	public int requestPiece(TorrentInfo torrent) throws IOException {
 		if (unchoked) {
-
 			int piece_index = findViablePiece();
 			if (piece_index == -1) {
 				return -1;
-			} // else if (piece_index == -2) {
-				// return 0;
-				// }
-
+			}
+			System.out.println("Requesting piece #" + piece_index);
 			socketOut.writeInt(13);
 			socketOut.writeByte(6);
 			socketOut.writeInt(piece_index);
 			socketOut.writeInt(0);
 			// FIXME: This will be 0 if file_length is divisible by
 			// piece_length
-			socketOut
+			/*socketOut
 					.writeInt(count == (torrent.piece_hashes.length - 1) ? torrent.file_length
 							% requestedPieceLength
-							: requestedPieceLength);
+							: requestedPieceLength);*/
+			socketOut.writeInt(16384);
 			socketOut.flush();
 		}
 		return 1;
@@ -212,10 +215,7 @@ public class Messenger {
 			if (PieceManager.checkPieceNecessity(pieces.get(i)) == 0) {
 				PieceManager.pieces[pieces.get(i)] = -1;
 				return pieces.get(i).intValue();
-			}// else if (PieceManager.checkPieceNecessity(pieces.get(i)) == -1)
-				// {
-				// return -2;
-			// }
+			}
 		}
 		System.out.println(-1);
 		return -1;

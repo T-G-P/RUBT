@@ -52,6 +52,7 @@ public class RUBTClient {
 		int myPort = 6881;
 		System.out.println(myPort);
 		byte[] myPeerId = genPeerId();
+		Messenger.setPID(myPeerId);
 
 		final Tracker tracker = new Tracker(torrent, myPort, myPeerId);
 
@@ -83,9 +84,11 @@ public class RUBTClient {
 					+ "\n\tport:" + peers[x].getPort());
 		}
 
-		int i = 1;
+		int i = 7;
 		Messenger peer = null;
-		System.out.println(toString(myPeerId));
+		System.out.println("Length of pieces" + torrent.piece_length);
+		System.out.println("Chunks per piece" + (torrent.piece_length / 16384));
+		System.out.println("Remainder" + (torrent.piece_length % 16384));
 		while (PieceManager.numTrue() != torrent.piece_hashes.length) {
 			try {
 				if (i == peers.length) {
@@ -123,13 +126,13 @@ public class RUBTClient {
 									+ (current_piece.getIndex()));
 							file.writeFile(current_piece);
 							PieceManager.markPiece(current_piece.getIndex());
-						} else if (message instanceof String) {
-							String response = (String) message;
-							if (response.equals("disconnected")) {
-								System.out.println("disconnected");
-								System.out.println(PieceManager.numTrue());
-								break;
+						} else if (message instanceof String[]) {
+							String[] response = (String[]) message;
+							for (int x = 0; x < response.length; x++) {
+								System.out.println(response[x]);
 							}
+							i++;
+							break;
 						}
 					} 
 
